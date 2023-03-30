@@ -12,6 +12,14 @@ class gaussian_likelihood(likelihood_base):
         self._covariance = np.ones((2,2))
         self._mu = np.zeros(2)
 
+    @property
+    def covariance(self) -> np.ndarray:
+        return self._covariance
+    
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu # type: ignore
+
     def set_likelihood_function(self, mu: np.float64, covariance: np.ndarray) -> None:
         self._mu = mu
         self._covariance = covariance
@@ -27,13 +35,17 @@ class multi_modal_gaussian(likelihood_base):
     def set_likelhood_function(self, mu: np.ndarray, covariance: np.ndarray) -> None:
         self._mu = mu
         self._covariance = covariance
+
         for i in range(len(mu)):
             self._individual_likelihoods[i] = gaussian_likelihood()
             self._individual_likelihoods[i].set_likelihood_function(self._mu[i], self._covariance[i])
+            self._individual_likelihoods[i].priors = self._prior
+
         self._likelihood_function = lambda x: np.sum([self._individual_likelihoods[i].likelihood_function(x) for i in range(len(mu))])
 
-    def get_indiv_likelihood(self, index):
-        return self._individual_likelihoods[index]
+    @property
+    def indiv_likelihood(self) -> np.ndarray:
+        return self._individual_likelihoods
     
 class poisson_likelihood(likelihood_base):
     def __init__(self) -> None:
@@ -42,8 +54,9 @@ class poisson_likelihood(likelihood_base):
 
     def set_likelihood_function(self, lam: np.ndarray) -> None:
         self._lambda = lam
+        if len(self._priors) == 0:
+            self._priors = np.ones(self._lambda.size)
         self._likelihood_function = lambda x: np.exp(-np.sum(self._lambda)+np.sum(x*np.log(self._lambda)))
-
 
 class likelihood_interface:
     def __init__(self, likelihood_name: str) -> None:
@@ -55,7 +68,10 @@ class likelihood_interface:
             self._likelihood = poisson_likelihood()
         else:
             raise ValueError("Likelihood not recognized.")
-        
+
+    def set_gaussian_prior(self, mu: np.ndarray, covariance: np.ndarray) -> None:
+        self._likelihood.prior = lambda x: [np.exp(-np.sum((x-mu[i])**2)/2)/np.sqrt(np.linalg.det(2*np.pi*covariance[i])) for i in range(len(mu))]
+
     def get_likelihood(self) -> likelihood_base:
         return self._likelihood # type: ignore
     

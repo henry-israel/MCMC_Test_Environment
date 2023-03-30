@@ -61,6 +61,10 @@ class hamiltonian_mcmc(mcmc_base):
     def do_position_step(self) -> None:
         self._proposed_state = self._proposed_state + self._epsilon*np.dot(self._mass_matrix, self._proposed_momentum)
 
+    @classmethod
+    def calculate_hamiltonian(cls, momentum: np.ndarray, likelihood: np.ndarray) -> float:
+        return np.dot(momentum, momentum) + likelihood
+
     def propose_step(self) -> None:
         for _ in range(self._time_step):
             self.do_momentum_step()
@@ -68,9 +72,9 @@ class hamiltonian_mcmc(mcmc_base):
             self.do_momentum_step()
 
     def accept_step(self) -> bool:
-        self._current_hamiltonian = np.dot(self._current_momentum, self._current_momentum) + self._proposed_likelihood
+        self._current_hamiltonian =  self.calculate_hamiltonian(self._current_momentum, self._current_momentum)
 
         self._proposed_likelihood = self._likelihood_space.likelihood_function(self._proposed_state)
-        self._proposed_hamiltonian = np.dot(self._current_momentum, self._current_momentum) + self._proposed_likelihood
+        self._proposed_hamiltonian = self.calculate_hamiltonian(self._proposed_momentum, self._proposed_likelihood)
 
         return min(1, np.exp(self._current_hamiltonian-self._proposed_hamiltonian))<np.random.uniform(0,1)

@@ -2,12 +2,14 @@
 Base class for likelihood functionality
 """
 import numpy as np
+from scipy.optimize import minimize
 from typing import Callable
 
 class likelihood_base():
     def __init__(self) -> None:
         self._likelihood_function = lambda x: np.exp(-np.sum(x**2)/2) # Bt default, use a gaussian likelihood
-        self._hessian = np.ndarray([])
+        self._covariance = np.ndarray([])
+        self._prior = lambda x: 1.0 # Default prior is uniform
 
     @property
     def likelihood_function(self) -> Callable:
@@ -20,30 +22,47 @@ class likelihood_base():
         """
         self._likelihood_function = likelihood_function
 
-    def get_gradient(self, state: np.ndarray) -> np.ndarray:
+    @property
+    def prior(self) -> Callable:
+        return self._prior
+    
+    @prior.setter
+    def prior(self, prior: Callable) -> None:
+        """
+        Set prior probabilities for each dimension
+        """
+        self._prior = prior
+
+    def get_gradient_variable(self, state: np.ndarray, index: int, state_llh: float) -> float:
+        state_plus = state.copy()
+        state_plus[index] += 1e-6
+        return (self._likelihood_function(state_plus)-state_llh)/1e-6
+
+    def get_full_gradient(self, state: np.ndarray) -> np.ndarray:
         """
         Gets multidimensional gradient of likelhood evaluated at a point (state)
         """
-        return np.array([self._likelihood_function(state+np.array([1e-6,0]))-self._likelihood_function(state-np.array([1e-6,0]))])/2e-6
+        grad_vec = np.zeros(len(state))
+        state_llh = self._likelihood_function(state)
 
-    def calculate_hessian(self, state: np.ndarray) -> None:
+        for i in range(len(state)):
+            self.get_gradient_variable(state, i, state_llh)
+        return grad_vec
+
+    def calculate_local_covariance(self, initial_state: np.ndarray) -> None:
         """
         Gets multidimensional hessian of likelihood evaluated at a point (state)
         """
-        llh_up = self._likelihood_function(state+np.array([1e-6,0]))
-        llh_down = self._likelihood_function(state-np.array([1e-6,0]))
-        llh_left = self._likelihood_function(state+np.array([0,1e-6]))
-        llh_right = self._likelihood_function(state-np.array([0,1e-6]))
+        result = minimize(lambda p: -self._likelihood_function(p), initial_state, method='BFGS')
+        self._covariance = result.hess_inv
 
-        self._hessian = np.array([[llh_up+llh_down-2*self._likelihood_function(state),
-                                    llh_left+llh_right-2*self._likelihood_function(state)],
-                                  [llh_left+llh_right-2*self._likelihood_function(state),
-                                    llh_up+llh_down-2*self._likelihood_function(state)]])/1e-12
-
-    def get_hessian(self, state: np.ndarray) -> np.ndarray:
+    def get_local_covariance(self, state: np.ndarray) -> np.ndarray:
         """
         Gets multidimensional hessian of likelihood evaluated at a point (state)
         """
-        if(self._hessian is None):
-            self.calculate_hessian(state)
-        return self._hessian
+        if(self._covariance is None):
+            self.calculate_local_covariance(state)
+        return self._covariance
+    
+    def get_covariance_root(self):
+        return np.linalg.cholesky(self._covariance)
