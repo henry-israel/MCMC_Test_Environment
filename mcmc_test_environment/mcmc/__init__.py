@@ -2,3 +2,4 @@ from base_class.mcmc_base import mcmc_base
 from metropolis_hastings.metropolis_hastings import metropolis_hastings
 from metropolis_hastings. adaptive_metropolis_hastings import adaptive_metropolis_hastings
 from hamiltonian.hamiltonian_mcmc import hamiltonian_mcmc
+from metropolis_hastings.jams_mcmc import jams_mcmc

@@ -2,8 +2,10 @@
 Metroplis based JAMS MCMC algorithm
 '''
 
-from adaptive_metropolis_hastings import metropolis_hastings
+from metropolis_hastings import metropolis_hastings
+from adaptive_metropolis_hastings import adaptive_metropolis_hastings
 import numpy as np
+from typing import Callable
 
 class jams_mcmc(metropolis_hastings):
     def __init__(self) -> None:
@@ -19,6 +21,7 @@ class jams_mcmc(metropolis_hastings):
 
         self._nominal_throw_matrix_arr = np.ndarray([])
         self._current_throw_matrix = np.ndarray([])
+        self._local_prior_arr = np.ndarray([])
 
         self._is_jump = False
         self._alphas = np.ndarray([])
@@ -49,6 +52,7 @@ class jams_mcmc(metropolis_hastings):
         self._nominal_throw_matrix_arr = np.zeros((n_modes, self._space_dim, self._space_dim))+np.diag(np.ones(self._space_dim)*0.00001)
         self._alphas = np.ndarray([n_modes])
         self._total_steps_mode = np.zeros(n_modes)
+        self._local_prior_arr = np.ndarray([n_modes])
 
     @property
     def current_mode(self) -> int:
@@ -89,6 +93,12 @@ class jams_mcmc(metropolis_hastings):
     @current_covs.setter
     def current_covs(self, current_covs: np.ndarray) -> None:
         self._current_covs = current_covs
+
+    def set_local_prior_mode(self, prior: Callable, mode: int) -> None:
+        self._local_prior_arr[mode] = prior
+
+    def get_local_prior_mode(self, mode: int) -> Callable:
+        return self._local_prior_arr[mode]
 
     def propose_step(self) -> None:
         if not self._is_jump and self._total_steps%self._global_update_limiter==0:
@@ -155,8 +165,9 @@ class jams_mcmc(metropolis_hastings):
         matrix_prop = self._likelihood_space.indiv_likelihood[self._proposed_mode].covariance()
         matrix_prop_determinant = np.linalg.det(matrix_prop)
 
-        prior_prop = np.exp(self._likelihood_space.indiv_likelihood[self._proposed_mode].prior(self._proposed_state))
+        prior_prop = np.exp(self._local_prior_arr[self._proposed_mode])
 
         self._proposed_jump_likelihood = np.sqrt(matrix_prop_determinant)*prior_prop/(self._n_modes-1)
 
         return min(1, self._proposed_jump_likelihood/self._current_jump_likelihood)>np.random.uniform(0,1)
+    

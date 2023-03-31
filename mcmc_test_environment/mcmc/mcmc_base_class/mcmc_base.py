@@ -83,6 +83,7 @@ class mcmc_base(ABC):
     Let's add a nice iterable version so we can run this step by step
     """
     def __iter__(self):
+        self._step_arr = np.zeros(self._space_dim)
         return self
     
     def __next__(self):
@@ -90,3 +91,4 @@ class mcmc_base(ABC):
         if self.accept_step():
             self._total_accepted_steps += 1
             self._current_state = self._proposed_state
+        self._step_arr = np.append(self._step_arr, self._current_state)
