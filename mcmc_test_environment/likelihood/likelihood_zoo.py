@@ -22,6 +22,7 @@ class gaussian_likelihood(likelihood_base):
 
     def set_likelihood_function(self, mu: np.float64, covariance: np.ndarray) -> None:
         self._mu = mu
+        self._initial_state = mu
         self._covariance = covariance
         self._likelihood_function = lambda x: np.exp(-np.sum((x-self._mu)**2)/2)/np.sqrt(np.linalg.det(2*np.pi*self._covariance))
 
@@ -32,8 +33,14 @@ class multi_modal_gaussian(likelihood_base):
         self._mu = np.zeros((2,2))
         self._individual_likelihoods = np.empty(2, dtype=gaussian_likelihood)
 
+    def get_n_modes(self):
+        return len(self._mu)
+
     def set_likelhood_function(self, mu: np.ndarray, covariance: np.ndarray) -> None:
         self._mu = mu
+
+        self._initial_state = mu[0]
+
         self._covariance = covariance
 
         for i in range(len(mu)):
@@ -46,17 +53,6 @@ class multi_modal_gaussian(likelihood_base):
     @property
     def indiv_likelihood(self) -> np.ndarray:
         return self._individual_likelihoods
-    
-class poisson_likelihood(likelihood_base):
-    def __init__(self) -> None:
-        super().__init__()
-        self._lambda = np.ones(2)
-
-    def set_likelihood_function(self, lam: np.ndarray) -> None:
-        self._lambda = lam
-        if len(self._priors) == 0:
-            self._priors = np.ones(self._lambda.size)
-        self._likelihood_function = lambda x: np.exp(-np.sum(self._lambda)+np.sum(x*np.log(self._lambda)))
 
 class likelihood_interface:
     def __init__(self, likelihood_name: str) -> None:
@@ -64,8 +60,6 @@ class likelihood_interface:
             self._likelihood = gaussian_likelihood()
         elif likelihood_name == "multi_modal":
             self._likelihood = multi_modal_gaussian()
-        elif likelihood_name == "poisson":
-            self._likelihood = poisson_likelihood()
         else:
             raise ValueError("Likelihood not recognized.")
 

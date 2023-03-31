@@ -3,7 +3,6 @@ Metroplis based JAMS MCMC algorithm
 '''
 
 from metropolis_hastings import metropolis_hastings
-from adaptive_metropolis_hastings import adaptive_metropolis_hastings
 import numpy as np
 from typing import Callable
 
@@ -85,6 +84,14 @@ class jams_mcmc(metropolis_hastings):
     @alphas.setter
     def alphas(self, alphas: np.ndarray) -> None:
         self._alphas = alphas
+
+    @property
+    def beta(self) -> float:
+        return self._beta
+    
+    @beta.setter
+    def beta(self, beta: float) -> None:
+        self._beta = beta
 
     @property
     def current_covs(self) -> np.ndarray:

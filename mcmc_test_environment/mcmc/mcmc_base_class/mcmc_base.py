@@ -43,7 +43,6 @@ class mcmc_base(ABC):
         self._current_state = state
         self._space_dim = len(state)
 
-
     def __call__(self, n_steps: int) -> None:
         print(f"Running MCMC for {n_steps} steps")
         print(f"Using {self._name} algorithm")

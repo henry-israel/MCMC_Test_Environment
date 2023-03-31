@@ -10,6 +10,14 @@ class likelihood_base():
         self._likelihood_function = lambda x: np.exp(-np.sum(x**2)/2) # Bt default, use a gaussian likelihood
         self._covariance = np.ndarray([])
         self._prior = lambda x: 1.0 # Default prior is uniform
+        self._initial_state = np.zeros(2)
+
+    def get_n_modes(self):
+        return 1
+    
+    @property
+    def initial_state(self) -> np.ndarray:
+        return self._initial_state
 
     @property
     def likelihood_function(self) -> Callable:
