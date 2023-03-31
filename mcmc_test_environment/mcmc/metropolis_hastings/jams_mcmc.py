@@ -3,7 +3,6 @@ Metroplis based JAMS MCMC algorithm
 '''
 
 from adaptive_metropolis_hastings import metropolis_hastings
-from mcmc_base_class import mcmc_base
 import numpy as np
 
 class jams_mcmc(metropolis_hastings):
@@ -23,8 +22,16 @@ class jams_mcmc(metropolis_hastings):
 
         self._is_jump = False
         self._alphas = np.ndarray([])
+        self._beta = 0.0000001
 
         self._total_steps_mode = np.ndarray([])
+
+        self._local_update_limiter = 100000
+        self._global_update_limiter = 10
+
+        # Value of likelihood from jump kernel
+        self._current_jump_likelihood = 99999
+        self._proposed_jump_likelihood = 99999
 
     def __call__(self, n_steps: int) -> None:
         super().__call__(n_steps)
@@ -84,6 +91,12 @@ class jams_mcmc(metropolis_hastings):
         self._current_covs = current_covs
 
     def propose_step(self) -> None:
+        if not self._is_jump and self._total_steps%self._global_update_limiter==0:
+            self.update_throw_matrix()
+        if self._total_steps_mode[self._current_mode]<self._local_update_limiter:
+            self.update_local()
+
+
         if np.random.uniform(0,1)<self._jump_epsilon:
             self.do_jump_step()
         else:
@@ -111,8 +124,10 @@ class jams_mcmc(metropolis_hastings):
                                               *self._total_steps_mode[self._current_mode]**(1/(self._n_modes-1)))
         self._current_throw_matrix = self._current_throw_matrix + np.diag(np.ones(self._space_dim)*0.0000001)
 
-    def update_throw_matrix(self, index: int) -> None:
-        
+    def update_throw_matrix(self) -> None:
+        '''
+        Updates total covariance for current mode
+        '''
         self._current_means[self._current_mode] = (self._previous_means[self._current_mode]*(self._total_steps_mode[self._current_mode]-1) +
                                                     self._current_state)/self._total_steps_mode[self._current_mode]
         prev_mean_contribtion = np.outer(self._previous_means[self._current_mode], self._previous_means[self._current_mode])
@@ -124,8 +139,24 @@ class jams_mcmc(metropolis_hastings):
         self._nominal_throw_matrix_arr[self._current_mode] = self._nominal_throw_matrix_arr[self._current_mode]*(self._total_steps_mode[self._current_mode]-1)
         self._nominal_throw_matrix_arr[self._current_mode] = self._nominal_throw_matrix_arr[self._current_mode]+ np.outer(self._current_state, self._current_state)
         self._nominal_throw_matrix_arr[self._current_mode] = self._nominal_throw_matrix_arr[self._current_mode]/self._total_steps
-        self._nominal_throw_matrix_arr[self._current_mode] = self._nominal_throw_matrix_arr[self._current_mode] +  np.outer(self._curr_mean, self._curr_mean)
+        self._nominal_throw_matrix_arr[self._current_mode] = self._nominal_throw_matrix_arr[self._current_mode] +  np.outer(self._curr_mean[self._current_mode], self._curr_mean[self._current_mode])
         self._nominal_throw_matrix_arr[self._current_mode] = self._nominal_throw_matrix_arr[self._current_mode]*(2.68**2)/self._space_dim
         self._nominal_throw_matrix_arr[self._current_mode] = self._nominal_throw_matrix_arr[self._current_mode] + np.diag(np.ones(self._space_dim)*self._beta)
         
 
+    def accept_step(self) -> bool:
+        if self._is_jump:
+            return self.jump_acceptance()
+        else:
+            return super().accept_step()
+
+    def jump_acceptance(self) -> bool:
+
+        matrix_prop = self._likelihood_space.indiv_likelihood[self._proposed_mode].covariance()
+        matrix_prop_determinant = np.linalg.det(matrix_prop)
+
+        prior_prop = np.exp(self._likelihood_space.indiv_likelihood[self._proposed_mode].prior(self._proposed_state))
+
+        self._proposed_jump_likelihood = np.sqrt(matrix_prop_determinant)*prior_prop/(self._n_modes-1)
+
+        return min(1, self._proposed_jump_likelihood/self._current_jump_likelihood)>np.random.uniform(0,1)
