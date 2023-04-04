@@ -67,6 +67,7 @@ class jams_mcmc(metropolis_hastings):
     @current_mode.setter
     def current_mode(self, current_mode) -> None:
         self._current_mode = current_mode
+        self._proposed_mode = current_mode
 
     @property
     def jump_epsilon(self) -> float:
@@ -139,7 +140,7 @@ class jams_mcmc(metropolis_hastings):
         if self._total_steps_mode[self._current_mode]<self._local_update_limiter:
             self.update_local()
 
-        if np.random.uniform(0,1)<self._jump_epsilon:            
+        if np.random.uniform(0,1)<self._jump_epsilon:
             self.do_jump_step()
         else:
             self.do_local_step()
@@ -162,13 +163,12 @@ class jams_mcmc(metropolis_hastings):
     def do_local_step(self) -> None:
         self._is_jump = False
         self._proposed_state = self._current_state + np.random.multivariate_normal(np.zeros(self._space_dim), self._throw_matrix)
-        self._proposed_likelihood = self._likelihood_space.likelihood_function(self._proposed_state)
+        self._proposed_likelihood = self._likelihood_space.indiv_likelihood[self._current_mode].likelihood_function(self._proposed_state)
 
     def update_local(self) -> None:
-        divisor = max(1, self._n_modes-1)
 
         self._throw_matrix *= np.exp((self._total_steps_mode[self._current_mode]/self._total_steps - 
-                                              (1/divisor)))
+                                              self._alphas[self._current_mode]))
         
         self._throw_matrix = self._throw_matrix + np.diag(np.ones(self._space_dim)*0.0000001)
 
@@ -220,3 +220,5 @@ class jams_mcmc(metropolis_hastings):
         self._proposed_jump_likelihood = np.sqrt(matrix_prop_determinant)*prior_prop/(self._n_modes-1)
         return min(1, self._proposed_jump_likelihood/self._current_jump_likelihood)>np.random.uniform(0,1)
     
+    def local_acceptance(self) -> bool:
+        prior_contribution = self._local_prior_dict[self._current_mode](self._proposed_likelihood)

@@ -62,7 +62,7 @@ class mcmc_interface:
             self._mcmc.likelihood = self._likelihood
             self._mcmc.n_modes = self._likelihood.get_n_modes()
             
-            self._mcmc.jump_epsilon = kwargs_dict['jump_epislon']
+            self._mcmc.jump_epsilon = kwargs_dict['jump_epsilon']
             self._mcmc.alphas = kwargs_dict['alpha_arr']
             self._mcmc.beta = kwargs_dict['beta']
             self._mcmc.nsteps_burn = kwargs_dict['burn_in']
@@ -74,7 +74,7 @@ class mcmc_interface:
 
             self._mcmc.n_modes = self._likelihood.get_n_modes()
 
-            self._mcmc.jump_epsilon = kwargs_dict['jump_epislon']
+            self._mcmc.jump_epsilon = kwargs_dict['jump_epsilon']
             self._mcmc.alphas = kwargs_dict['alpha_arr']
             self._mcmc.beta = kwargs_dict['beta']
             self._mcmc.current_state = self._likelihood.initial_state
@@ -104,7 +104,7 @@ class mcmc_interface:
     def mcmc_type(self) -> str:
         return self._mcmc_type
     
-    def plot_mcmc(self, output_name: str, burnin) -> None:
+    def plot_mcmc(self, output_name: str, burnin, overlay=None) -> None:
         mcmc_chain = self._mcmc.step_array
         print(f"Plotting chain to file: {output_name}")
         n_params = mcmc_chain.shape[1]
@@ -112,6 +112,8 @@ class mcmc_interface:
             for param in tqdm(range(n_params)):
                 fig, ax = plt.subplots(figsize=(10,10))
                 ax.hist(mcmc_chain[burnin:,param], bins=100)
+                if overlay is not None:
+                    ax.plot(overlay)
                 ax.set_ylabel(f"Parameter {param}")
                 ax.set_xlabel("Step")
                 pdf.savefig(fig)

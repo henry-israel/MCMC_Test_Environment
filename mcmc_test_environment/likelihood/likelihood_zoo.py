@@ -17,7 +17,7 @@ class gaussian_likelihood(likelihood_base):
     @property
     def covariance(self) -> np.ndarray:
         return self._covariance
-    
+
     @property
     def mu(self) -> np.ndarray:
         return self._mu # type: ignore

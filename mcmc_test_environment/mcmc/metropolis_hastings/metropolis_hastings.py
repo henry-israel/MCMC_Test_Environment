@@ -16,7 +16,6 @@ class metropolis_hastings(mcmc_base):
         if len(self._throw_matrix) == 0:
             self._throw_matrix = np.ones((self._space_dim, self._space_dim))
 
-        self._current_state = self._likelihood_space.initial_state
         self._current_likelihood = self._likelihood_space.likelihood_function(self._current_state)
         super().__call__(n_steps)
 

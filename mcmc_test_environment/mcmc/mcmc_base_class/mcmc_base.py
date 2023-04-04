@@ -50,7 +50,6 @@ class mcmc_base(ABC):
     @proposed_state.setter
     def proposed_state(self, state: np.ndarray) -> None:
         self._proposed_state = state
-    
 
     @property
     def likelihood(self) -> likelihood_base:
@@ -68,6 +67,12 @@ class mcmc_base(ABC):
     @property
     def step_array(self) -> np.ndarray:
         return self._step_arr
+
+    def initialise_step_array(self, n_steps: int) -> None:
+        self._step_arr = np.zeros((n_steps, self._space_dim,))
+
+    def append_to_step_array(self, index: int) -> None:
+        self._step_arr[index] = self._current_state
     
     @property
     def proposed_likelihood(self) -> float:

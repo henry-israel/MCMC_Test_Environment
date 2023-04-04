@@ -4,6 +4,9 @@ from typing import Any
 import numpy as np
 from tqdm import tqdm
 from scipy.stats import multivariate_normal
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
 '''
 Class to handle several JAMS chains and run them in parallel
 '''
@@ -91,42 +94,33 @@ class jams_burner():
         cov_factor = lambda x,i : mv_arr[i].pdf(x)
         self._local_priors = lambda x,i : cov_factor(x,i) * self._local_priors(x,i)
 
-    def initalise_chains(self) -> jams_mcmc:
+    def initialise_chains(self, mode: int) -> jams_mcmc:
         chain = jams_mcmc()
+        chain.current_mode = mode
         chain.jump_epsilon = 0
         chain.likelihood = self.likelihood
         chain.alphas = self._alpha_arr
         chain.beta = self._beta
-        chain.global_update_limiter = 1
+        chain.global_update_limiter = 10
         chain.n_modes = self._n_modes
+        chain.initialise_step_array(self._nsteps_burn)
         return chain
 
     def __call__(self, n_steps_run: int) -> Any:
         
         print(f"RUNNING JAMS WITH {self._nsteps_burn} steps of burnin")
-        chain_init = self.initalise_chains()
-        self._jams_chains = np.array([chain_init for _ in range(self._n_modes)])
+        self._jams_chains = np.array([self.initialise_chains(i) for i in range(self._n_modes)])
         
         for i, chain in enumerate(self._jams_chains):
             self._local_priors = lambda x, i : chain.get_local_prior_mode(i)(x)
             chain.current_mode = i
+            chain.current_state = self._likelihood.indiv_likelihood[i].initial_state
+            print(f"Current state : {chain.current_state}")
+            chain.set_local_prior_mode(self._local_priors, i)
+            chain(self._nsteps_burn)
 
-        for step in tqdm(range(self._nsteps_burn)):
-            for chain in self._jams_chains:
-                chain.jump_epsilon=0
-                chain.propose_step()
-                chain.step_count = step+1
-                if(chain.accept_step()):
-                    chain.current_state = chain.proposed_state
-                    chain.current_likelihood = chain.proposed_likelihood
-            # Now we update our priors!
-            if(step>100):
-                self.update_total_covariance()
+            self.plot_traces(chain, f"burnt_in_chain_{i}.pdf")
 
-            for i, chain in enumerate(self._jams_chains):
-                chain.set_local_prior_mode(self._local_priors, i)
-
-        # Okay now we've burnt in we can actually run a single chain
         print("Burnt in, now running JAMS chain")
 
         new_chain = jams_mcmc()
@@ -150,3 +144,22 @@ class jams_burner():
         # Returns the chain so we can mess with it!
         self._step_arr = new_chain.step_array
         return new_chain
+
+    @classmethod
+    def plot_traces(cls, mcmc_obj, output_file_name: str) -> None:
+        """
+        Plot the trace plots
+        """
+        print("Plotting traces")
+        markov_chain = mcmc_obj.step_array
+        print(markov_chain.shape)
+        n_params = markov_chain.shape[1]
+        print(n_params)
+        with PdfPages(f"{output_file_name}") as pdf:
+            for param in tqdm(range(n_params)):
+                fig, ax = plt.subplots(figsize=(10,10))
+                ax.plot([markov_chain[step][param] for step in range(markov_chain.shape[0])])
+                ax.set_ylabel(f"Parameter {param}")
+                ax.set_xlabel("Step")
+                pdf.savefig(fig)
+                plt.close(fig)

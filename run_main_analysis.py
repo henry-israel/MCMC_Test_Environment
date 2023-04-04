@@ -7,13 +7,15 @@ from mcmc_test_environment.diagnostics.autocorrelation import autocorrelation
 if __name__=="__main__":
     print("Running main analysis")
 
-    TOTAL_STEPS=1000000
+    TOTAL_STEPS=400000
 
     # Set up the mcmc objects
     SPACEDIM = 2
     mu = [np.zeros((SPACEDIM)), 10*np.ones((SPACEDIM))]
-    covariance_matrix = [np.diag(np.ones(SPACEDIM)), 3*np.diag(np.ones(SPACEDIM))]
+    covariance_matrix = [np.diag(np.ones(SPACEDIM)), np.diag(np.ones(SPACEDIM))]
     step_sizes = np.ones(SPACEDIM)
+
+    
 
     # # metropolis hastings objects
     metropolis_hastings_obj = mcmc_interface.mcmc_interface(mcmc_type="jump_metropolis", likelihood_type="multivariate_gaussian", step_sizes=step_sizes, mu=mu, covariance=covariance_matrix, throw_matrix=covariance_matrix[0])
@@ -23,7 +25,7 @@ if __name__=="__main__":
     alpha = np.ones(SPACEDIM)/SPACEDIM
     jams_obj = mcmc_interface.mcmc_interface(mcmc_type="jams_mcmc_burnin", likelihood_type="multivariate_gaussian",
                                               mu=mu, covariance=covariance_matrix, alpha_arr=alpha, beta=0.1,
-                                                jump_epislon=0.5, step_sizes=step_sizes, burn_in=200000)
+                                                jump_epsilon=0.2, step_sizes=step_sizes, burn_in=300000)
 
     # Hamiltonian MCMC
     hamiltonian_mcmc_obj = mcmc_interface.mcmc_interface("hamiltonian_mcmc", "multivariate_gaussian", mu=mu, 
@@ -34,8 +36,8 @@ if __name__=="__main__":
     # throw = adaptive_mcmc_obj.mcmc.throw_matrix
 
 
-    # Run the mcmc objects
-    mcmc_arr = [metropolis_hastings_obj, jams_obj]
+    # Run the mcmc objects metropolis_hastings_obj
+    mcmc_arr = [jams_obj]
     for mcmc_obj in mcmc_arr:
         mcmc_obj(TOTAL_STEPS)
         # Plot the object

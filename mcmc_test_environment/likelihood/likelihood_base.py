@@ -6,6 +6,8 @@ from scipy.optimize import minimize
 from typing import Callable
 import sys
 
+from matplotlib import pyplot as plt
+
 class likelihood_base():
     def __init__(self) -> None:
         self._likelihood_function = lambda x: np.exp(-np.sum(x**2)/2) # Bt default, use a gaussian likelihood
