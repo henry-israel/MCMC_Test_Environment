@@ -1,4 +1,4 @@
-from mcmc import metropolis_hastings
+from .metropolis_hastings import metropolis_hastings
 import numpy as np
 
 class adaptive_metropolis_hastings(metropolis_hastings):
@@ -9,6 +9,10 @@ class adaptive_metropolis_hastings(metropolis_hastings):
         self._curr_mean = np.ndarray([])
         self._beta = 0.00001
         self._throw_matrix = np.ndarray([])
+
+    @property
+    def throw_matrix(self) -> np.ndarray:
+        return self._throw_matrix
 
     def __call__(self, n_steps: int) -> None:
         self._throw_matrix = np.diag(np.ones(self._space_dim)*self._beta)

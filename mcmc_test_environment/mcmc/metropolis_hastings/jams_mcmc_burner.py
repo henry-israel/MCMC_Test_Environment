@@ -1,9 +1,9 @@
-from mcmc import jams_mcmc
-from likelihood import likelihood_base, likelihood_zoo
+from .jams_mcmc import jams_mcmc
+from ...likelihood import likelihood_base, likelihood_zoo
 from typing import Any
 import numpy as np
 from tqdm import tqdm
-
+from scipy.stats import multivariate_normal
 '''
 Class to handle several JAMS chains and run them in parallel
 '''
@@ -13,12 +13,15 @@ class jams_burner():
         self._n_modes = 0
         self._jams_chains = np.ndarray([])
         self._prior_array = np.ndarray([])
-        self._covariance_factor = None
-        self._local_covariance = np.ndarray([])
         self._alpha_arr = np.ndarray([])
         self._beta = 0.0000001
         self._jump_epsilon = 0.1
-        nsteps_burn = 10000
+        self._nsteps_burn = 10000
+        self._step_arr = np.ndarray([])
+
+        self._step_sizes = np.ndarray([])
+
+        self._local_priors = lambda x, i: 1+x+i
 
     @property
     def nsteps_burn(self) -> int:
@@ -39,13 +42,21 @@ class jams_burner():
     @property
     def n_modes(self) -> int:
         return self._n_modes
+
+    @property
+    def step_sizes(self) -> np.ndarray:
+        return self._step_sizes
     
+    @step_sizes.setter
+    def step_sizes(self, step_sizes: np.ndarray) -> None:
+        self._step_sizes = step_sizes
+
     @n_modes.setter
     def n_modes(self, n_modes: int) -> None:
         self._n_modes = n_modes
         self._jams_chains = [jams_mcmc() for _ in range(n_modes)]
-        self._prior_array = np.ndarray([n_modes])
-        self._local_covariance = np.ndarray([n_modes])
+        self._prior_array = np.empty(n_modes)
+        self._local_covariance = np.empty(n_modes)
 
     @property
     def jump_epsilon(self) -> float:
@@ -71,43 +82,49 @@ class jams_burner():
     def beta(self, beta: float) -> None:
         self._beta = beta
 
+    @property
+    def step_array(self) -> np.ndarray:
+        return self._step_arr
 
-    def update_total_covariance(self):
-        for i, chain in enumerate(self._jams_chains):
-            self._local_covariance[i] = lambda x: np.random.multivariate_normal(x, 
-                                                chain._current_means[i], chain._current_covs[i])/self._n_modes
+    def update_total_covariance(self) -> None:
+        mv_arr = [multivariate_normal(chain._current_means[i], chain._nominal_throw_matrix_arr[i]) for i, chain in enumerate(self._jams_chains)]
+        cov_factor = lambda x,i : mv_arr[i].pdf(x)
+        self._local_priors = lambda x,i : cov_factor(x,i) * self._local_priors(x,i)
 
-        self._covariance_factor = lambda x: sum([self._local_covariance[i](x) for i in range(self._n_modes)])
-
-    def initalise_chains(self):
+    def initalise_chains(self) -> jams_mcmc:
         chain = jams_mcmc()
         chain.jump_epsilon = 0
         chain.likelihood = self.likelihood
         chain.alphas = self._alpha_arr
         chain.beta = self._beta
+        chain.global_update_limiter = 1
         chain.n_modes = self._n_modes
+        return chain
 
-    def __call__(self, n_steps_run) -> Any:
+    def __call__(self, n_steps_run: int) -> Any:
         
-        print(f"RUNNING JAMS WITH {self._nsteps_burn} of burnin")
+        print(f"RUNNING JAMS WITH {self._nsteps_burn} steps of burnin")
+        chain_init = self.initalise_chains()
+        self._jams_chains = np.array([chain_init for _ in range(self._n_modes)])
+        
         for i, chain in enumerate(self._jams_chains):
-            chain.current_state = self._likelihood.indiv_likelihood[i].mu
-            chain.likelihood = self._likelihood
-            chain.n_modes = self._n_modes
+            self._local_priors = lambda x, i : chain.get_local_prior_mode(i)(x)
             chain.current_mode = i
-            self._prior_array[i] = chain.get_local_prior_mode(i)
 
-        for _ in tqdm(range(self._nsteps_burn)):
+        for step in tqdm(range(self._nsteps_burn)):
             for chain in self._jams_chains:
+                chain.jump_epsilon=0
                 chain.propose_step()
-                if(chain.accept_step):
-                    chain._total_accepted_steps += 1
-                    chain._current_state = chain._proposed_state
-
+                chain.step_count = step+1
+                if(chain.accept_step()):
+                    chain.current_state = chain.proposed_state
+                    chain.current_likelihood = chain.proposed_likelihood
             # Now we update our priors!
-            self.update_total_covariance()
+            if(step>100):
+                self.update_total_covariance()
+
             for i, chain in enumerate(self._jams_chains):
-                chain.set_local_prior_mode(self._prior_array[i], i)
+                chain.set_local_prior_mode(self._local_priors, i)
 
         # Okay now we've burnt in we can actually run a single chain
         print("Burnt in, now running JAMS chain")
@@ -115,19 +132,21 @@ class jams_burner():
         new_chain = jams_mcmc()
         new_chain.likelihood = self._likelihood
         new_chain.n_modes = self._n_modes
-        
         new_chain.current_state = self._jams_chains[0]._current_state
         new_chain.jump_epsilon = self._jump_epsilon
         new_chain.beta = self._beta
         new_chain.alphas = self._alpha_arr
+        new_chain.current_covs = np.empty(self._n_modes, dtype=object)
+        new_chain.set_step_sizes(self._step_sizes)
 
         for i in range(self._n_modes):
             new_chain.set_local_prior_mode(self._prior_array[i], i)
             new_chain.current_covs[i] = self._jams_chains[i].current_covs[i]
             new_chain.current_means[i] = self._jams_chains[i].current_means[i]
-            new_chain.alphas[i] = self._jams_chains[i].alphas[i]
+            # new_chain.alphas[i] = self._jams_chains[i].alphas[i]
 
         new_chain(n_steps_run)
 
         # Returns the chain so we can mess with it!
+        self._step_arr = new_chain.step_array
         return new_chain
